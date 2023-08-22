@@ -16,7 +16,7 @@ class ETLJob:
     A class that performs ETL (Extract, Transform, Load)
     """
 
-    def __init__(self, input_table, output_table):
+    def __init__(self, input_table, output_table, bucket):
         """
         Initializes the Spark session for the ETL job.
         """
@@ -26,6 +26,7 @@ class ETLJob:
         self.job = Job(self.glueContext)
         self.input_table: str = input_table
         self.output_table: str = output_table
+        self.bucket: str = bucket
 
     def extract(self) -> DataFrame:
         """
@@ -42,59 +43,59 @@ class ETLJob:
     
     def _parse_columns(self, dataframe: DataFrame) -> DataFrame:
         parser: dict = {
-            "ano": {
+            "Ano": {
                 "type": "int",
                 "name": "ano"
             },
-            "trimestre": {
+            "Trimestre": {
                 "type": "int",
                 "name": "num_trimestre"
             },
-            "categoria": {
+            "Categoria": {
                 "type": "string",
                 "name": "nom_categoria"
             },
-            "tipo": {
+            "Tipo": {
                 "type": "string",
                 "name": "nom_tipo_instituicao"
             },
-            "cnpj if": {
+            "CNPJ IF": {
                 "type": "bigint",
                 "name": "num_cnpj_instituicao"
             },
-            "instituição financeira": {
+            "Instituição Financeira": {
                 "type": "string",
                 "name": "nom_instituicao"
             },
-            "índice": {
+            "Índice": {
                 "type": "float",
                 "name": "vlr_ind_recl"
             },
-            "quantidade de reclamações reguladas procedentes": {
+            "Quantidade de reclamações reguladas procedentes": {
                 "type": "bigint",
                 "name": "qtd_recl_reg_prec"
             },
-            "quantidade de reclamações reguladas - outras": {
+            "Quantidade de reclamações reguladas - outras": {
                 "type": "bigint",
                 "name": "qtd_recl_reg_outr"
             },
-            "quantidade de reclamações não reguladas": {
+            "Quantidade de reclamações não reguladas": {
                 "type": "bigint",
                 "name": "qtd_recl_nao_reg"
             },
-            "quantidade total de reclamações": {
+            "Quantidade total de reclamações": {
                 "type": "bigint",
                 "name": "qtd_totl_recl"
             },
-            "quantidade total de clientes  ccs e scr": {
+            "Quantidade total de clientes  CCS e SCR": {
                 "type": "bigint",
                 "name": "qtd_totl_clie_css_scr"
             },
-            "quantidade de clientes  ccs": {
+            "Quantidade de clientes  CCS": {
                 "type": "bigint",
                 "name": "qtd_clie_ccs"
             },
-            "quantidade de clientes  scr": {
+            "Quantidade de clientes  SCR": {
                 "type": "bigint",
                 "name": "qtd_clie_scr"
             },
@@ -123,20 +124,20 @@ class ETLJob:
             DataFrame: A Spark DataFrame ready to be loaded.
         """
         
-        dataframe = dataframe.withColumn(colName="instituição financeira",
-                                         col=regexp_replace("instituição financeira",
+        dataframe = dataframe.withColumn(colName="Instituição Financeira",
+                                         col=regexp_replace("Instituição Financeira",
                                                             " \(conglomerado\)",
                                                             ""))
-        dataframe = dataframe.withColumn(colName="instituição financeira",
-                                         col=regexp_replace("instituição financeira",
+        dataframe = dataframe.withColumn(colName="Instituição Financeira",
+                                         col=regexp_replace("Instituição Financeira",
                                                             "Ô",
                                                             "O"))
         dataframe = dataframe.withColumn(colName="Trimestre",
                                          col=regexp_replace("Trimestre",
                                                             "º",
                                                             ""))
-        dataframe = dataframe.withColumn(colName="índice",
-                                         col=regexp_replace("índice",
+        dataframe = dataframe.withColumn(colName="Índice",
+                                         col=regexp_replace("Índice",
                                                             ",",
                                                             "\."))
         dataframe = self._parse_columns(dataframe)
@@ -167,7 +168,7 @@ class ETLJob:
         # Write data to output file in Parquet format with Snappy compression
         # If a file already exists at the output location,
         # it will be overwritten.
-        path: str = f"s3://pecepoli-usp-sot-458982960441/{self.output_table.split('.')[1]}/"
+        path: str = f"s3://{self.bucket}/{self.output_table.split('.')[0]}/{self.output_table.split('.')[1]}/"
         df_final.write\
                 .mode("overwrite")\
                 .partitionBy(["ano", "num_trimestre"])\
@@ -191,9 +192,11 @@ if __name__ == '__main__':
                           ['JOB_NAME',
                            'INPUT_DATABASE',
                            'INPUT_TABLE',
+                           'BUCKET',
                            'OUTPUT_DATABASE',
                            'OUTPUT_TABLE'])
     ETL: ETLJob = ETLJob(input_table=f'{args["INPUT_DATABASE"]}.{args["INPUT_TABLE"]}',
-                         output_table=f'{args["OUTPUT_DATABASE"]}.{args["OUTPUT_TABLE"]}')
+                         output_table=f'{args["OUTPUT_DATABASE"]}.{args["OUTPUT_TABLE"]}',
+                         bucket=args["BUCKET"])
     ETL.job.init(args['JOB_NAME'], args)
     ETL.run()

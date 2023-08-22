@@ -37,6 +37,7 @@ class ETLJob:
         """
         df_raw: DataFrame = self.spark\
                                 .read\
+                                .options(encoding="ISO-8859-1")\
                                 .csv(path=self.input_path,
                                      sep=";",
                                      header=True)
