@@ -115,6 +115,10 @@ class ETLJob:
                 .partitionBy("anomesdia")\
                 .parquet(path=path,
                          compression="snappy")
+        # Operação MSCK é custosa, em um ambiente real o
+        # ideal é utilizar a SDK da AWS boto3 para adicionar
+        # as partições diretamente no Glue Data Catalog
+        self.spark.sql("MSCK REPAIR TABLE db_sot.tb_bancos")
 
     def run(self) -> None:
         """
@@ -127,6 +131,7 @@ class ETLJob:
             None
         """
         self.load(self.transform(self.extract()))
+
 
 if __name__ == '__main__':
     args = getResolvedOptions(sys.argv,
