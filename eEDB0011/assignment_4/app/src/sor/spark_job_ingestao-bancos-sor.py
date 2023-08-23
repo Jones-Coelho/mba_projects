@@ -3,7 +3,9 @@ from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.job import Job
-from pyspark.sql.functions import regexp_replace
+from pyspark.sql.types import StructField
+from pyspark.sql.types import StringType
+from pyspark.sql.types import StructType
 from pyspark.sql import DataFrame
 from pyspark.sql import SparkSession
 from datetime import datetime
@@ -26,6 +28,10 @@ class ETLJob:
         self.job = Job(self.glueContext)
         self.input_path: str = input_path
         self.output_path: str = output_path
+        self.input_schema: StructType = StructType([
+            StructField("Segmento", StringType(), True),
+            StructField("CNPJ", StringType(), True),
+            StructField("Nome", StringType(), True)])
 
     def extract(self) -> DataFrame:
         """
@@ -39,7 +45,8 @@ class ETLJob:
                                 .read\
                                 .csv(path=self.input_path,
                                      sep="\t",
-                                     header=True)
+                                     header=True,
+                                     schema=self.input_schema)
         return df_raw
 
     def transform(self, dataframe: DataFrame) -> DataFrame:
@@ -85,6 +92,10 @@ class ETLJob:
                 .partitionBy("anomesdia")\
                 .parquet(path=self.output_path,
                          compression="snappy")
+        # Operação MSCK é custosa, em um ambiente real o
+        # ideal é utilizar a SDK da AWS boto3 para adicionar
+        # as partições diretamente no Glue Data Catalog
+        self.spark.sql("MSCK REPAIR TABLE db_sor.tb_bancos")
 
     def run(self) -> None:
         """
@@ -98,11 +109,12 @@ class ETLJob:
         """
         self.load(self.transform(self.extract()))
 
+
 if __name__ == '__main__':
     args = getResolvedOptions(sys.argv,
-                          ['JOB_NAME',
-                           'INPUT_PATH',
-                           'OUTPUT_PATH'])
+                              ['JOB_NAME',
+                               'INPUT_PATH',
+                               'OUTPUT_PATH'])
     ETL: ETLJob = ETLJob(input_path=args["INPUT_PATH"],
                          output_path=args["OUTPUT_PATH"])
     ETL.job.init(args['JOB_NAME'], args)
