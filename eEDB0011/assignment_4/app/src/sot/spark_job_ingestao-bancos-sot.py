@@ -16,7 +16,7 @@ class ETLJob:
     A class that performs ETL (Extract, Transform, Load)
     """
 
-    def __init__(self, input_table, output_table):
+    def __init__(self, input_table, output_table, bucket):
         """
         Initializes the Spark session for the ETL job.
         """
@@ -26,7 +26,8 @@ class ETLJob:
         self.job = Job(self.glueContext)
         self.input_table: str = input_table
         self.output_table: str = output_table
-
+        self.bucket: str = bucket
+       
     def extract(self) -> DataFrame:
         """
         Reads a CSV file from a specified location and
@@ -108,12 +109,16 @@ class ETLJob:
         # Write data to output file in Parquet format with Snappy compression
         # If a file already exists at the output location,
         # it will be overwritten.
-        path: str = f"s3://pecepoli-usp-sot-458982960441/{self.output_table.split('.')[1]}/"
+        path: str = f"s3://{self.bucket}/{self.output_table.split('.')[0]}/{self.output_table.split('.')[1]}/"
         df_final.write\
                 .mode("overwrite")\
                 .partitionBy("anomesdia")\
                 .parquet(path=path,
                          compression="snappy")
+        # Operação MSCK é custosa, em um ambiente real o
+        # ideal é utilizar a SDK da AWS boto3 para adicionar
+        # as partições diretamente no Glue Data Catalog
+        self.spark.sql("MSCK REPAIR TABLE db_sot.tb_bancos")
 
     def run(self) -> None:
         """
@@ -127,14 +132,18 @@ class ETLJob:
         """
         self.load(self.transform(self.extract()))
 
+
 if __name__ == '__main__':
     args = getResolvedOptions(sys.argv,
                           ['JOB_NAME',
                            'INPUT_DATABASE',
                            'INPUT_TABLE',
                            'OUTPUT_DATABASE',
-                           'OUTPUT_TABLE'])
+                           'OUTPUT_TABLE',
+                           'BUCKET'
+                           ])
     ETL: ETLJob = ETLJob(input_table=f'{args["INPUT_DATABASE"]}.{args["INPUT_TABLE"]}',
-                         output_table=f'{args["OUTPUT_DATABASE"]}.{args["OUTPUT_TABLE"]}')
+                         output_table=f'{args["OUTPUT_DATABASE"]}.{args["OUTPUT_TABLE"]}',
+                         bucket=args["BUCKET"])
     ETL.job.init(args['JOB_NAME'], args)
     ETL.run()

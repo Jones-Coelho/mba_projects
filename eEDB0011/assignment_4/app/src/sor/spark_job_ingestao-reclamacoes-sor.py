@@ -6,7 +6,9 @@ from awsglue.job import Job
 from pyspark.sql.functions import regexp_replace
 from pyspark.sql import DataFrame
 from pyspark.sql import SparkSession
-from datetime import datetime
+from pyspark.sql.types import StructField
+from pyspark.sql.types import StringType
+from pyspark.sql.types import StructType
 from pyspark.sql import functions as F
 # Author: Jones Coelho
 
@@ -26,6 +28,30 @@ class ETLJob:
         self.job = Job(self.glueContext)
         self.input_path: str = input_path
         self.output_path: str = output_path
+        self.input_schema: StructType = StructType([
+            StructField("Ano", StringType(), True),
+            StructField("Trimestre", StringType(), True),
+            StructField("Categoria", StringType(), True),
+            StructField("Tipo", StringType(), True),
+            StructField("CNPJ IF", StringType(), True),
+            StructField("Instituição financeira", StringType(), True),
+            StructField("Índice", StringType(), True),
+            StructField("Quantidade de reclamações reguladas procedentes",
+                        StringType(),
+                        True),
+            StructField("Quantidade de reclamações reguladas - outras",
+                        StringType(),
+                        True),
+            StructField("Quantidade de reclamações não reguladas",
+                        StringType(),
+                        True),
+            StructField("Quantidade total de reclamações",
+                        StringType(),
+                        True),
+            StructField("Quantidade total de clientes  CCS e SCR",
+                        StringType(), True),
+            StructField("Quantidade de clientes  CCS", StringType(), True),
+            StructField("Quantidade de clientes  SCR", StringType(), True)])
 
     def extract(self) -> DataFrame:
         """
@@ -37,9 +63,12 @@ class ETLJob:
         """
         df_raw: DataFrame = self.spark\
                                 .read\
+                                .options(encoding="ISO-8859-1")\
                                 .csv(path=self.input_path,
                                      sep=";",
-                                     header=True)
+                                     header=True,
+                                     schema=self.input_schema,
+                                     encoding="ISO 8859-1")
         return df_raw
 
     def transform(self, dataframe: DataFrame) -> DataFrame:
@@ -95,6 +124,10 @@ class ETLJob:
                 .partitionBy("anomesdia")\
                 .parquet(path=self.output_path,
                          compression="snappy")
+        # Operação MSCK é custosa, em um ambiente real o
+        # ideal é utilizar a SDK da AWS boto3 para adicionar
+        # as partições diretamente no Glue Data Catalog
+        self.spark.sql("MSCK REPAIR TABLE db_sor.tb_reclamacoes")
 
     def run(self) -> None:
         """
@@ -108,11 +141,12 @@ class ETLJob:
         """
         self.load(self.transform(self.extract()))
 
+
 if __name__ == '__main__':
     args = getResolvedOptions(sys.argv,
-                          ['JOB_NAME',
-                           'INPUT_PATH',
-                           'OUTPUT_PATH'])
+                              ['JOB_NAME',
+                               'INPUT_PATH',
+                               'OUTPUT_PATH'])
     ETL: ETLJob = ETLJob(input_path=args["INPUT_PATH"],
                          output_path=args["OUTPUT_PATH"])
     ETL.job.init(args['JOB_NAME'], args)

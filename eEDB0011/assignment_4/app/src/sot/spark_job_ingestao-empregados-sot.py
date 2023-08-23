@@ -16,7 +16,7 @@ class ETLJob:
     A class that performs ETL (Extract, Transform, Load)
     """
 
-    def __init__(self, input_table, output_table):
+    def __init__(self, input_table, output_table, bucket):
         """
         Initializes the Spark session for the ETL job.
         """
@@ -26,6 +26,7 @@ class ETLJob:
         self.job = Job(self.glueContext)
         self.input_table: str = input_table
         self.output_table: str = output_table
+        self.bucket: str = bucket
 
     def extract(self) -> DataFrame:
         """
@@ -38,9 +39,11 @@ class ETLJob:
         df_raw: DataFrame = self.spark\
                                 .read\
                                 .table(self.input_table)
+        
         return df_raw
     
     def _parse_columns(self, dataframe: DataFrame) -> DataFrame:
+        print("PARSER")
         parser: dict = {
             "reviews_count": {
                 "type": "int",
@@ -86,43 +89,43 @@ class ETLJob:
                 "type": "string",
                 "name": "txt_url_orig_data"
             },
-            "geral": {
+            "Geral": {
                 "type": "float",
                 "name": "vlr_ind_satis_geral"
             },
-            "cultura e valores": {
+            "Cultura e valores": {
                 "type": "float",
                 "name": "vlr_ind_cult_valrs"
             },
-            "diversidade e inclusão": {
+            "Diversidade e inclusão": {
                 "type": "float",
                 "name": "vlr_ind_divr_incl"
             },
-            "qualidade de vida": {
+            "Qualidade de vida": {
                 "type": "float",
                 "name": "vlr_ind_qual_vida"
             },
-            "alta liderança": {
+            "Alta liderança": {
                 "type": "float",
                 "name": "vlr_ind_alt_lider"
             },
-            "remuneração e benefícios": {
+            "Remuneração e benefícios": {
                 "type": "float",
                 "name": "vlr_ind_remu_bene"
             },
-            "oportunidades de carreira": {
+            "Oportunidades de carreira": {
                 "type": "float",
                 "name": "vlr_ind_oprt_carr"
             },
-            "recomendam para outras pessoas(%)": {
+            "Recomendam para outras pessoas(%)": {
                 "type": "float",
                 "name": "vlr_pct_recom_outr_pess"
             },
-            "perspectiva positiva da empresa(%)": {
+            "Perspectiva positiva da empresa(%)": {
                 "type": "float",
                 "name": "vlr_pct_perspec_pos_instituicao"
             },
-            "nome": {
+            "Nome": {
                 "type": "string",
                 "name": "nom_instituicao"
             }}
@@ -184,12 +187,16 @@ class ETLJob:
         # Write data to output file in Parquet format with Snappy compression
         # If a file already exists at the output location,
         # it will be overwritten.
-        path: str = f"s3://pecepoli-usp-sot-458982960441/{self.output_table.split('.')[1]}/"
+        path: str = f"s3://{self.bucket}/{self.output_table.split('.')[0]}/{self.output_table.split('.')[1]}/"
         df_final.write\
                 .mode("overwrite")\
                 .partitionBy("anomesdia")\
                 .parquet(path=path,
                          compression="snappy")
+        # Operação MSCK é custosa, em um ambiente real o
+        # ideal é utilizar a SDK da AWS boto3 para adicionar
+        # as partições diretamente no Glue Data Catalog
+        self.spark.sql("MSCK REPAIR TABLE db_sot.tb_empregados")
 
     def run(self) -> None:
         """
@@ -203,14 +210,18 @@ class ETLJob:
         """
         self.load(self.transform(self.extract()))
 
+
 if __name__ == '__main__':
+
     args = getResolvedOptions(sys.argv,
                           ['JOB_NAME',
                            'INPUT_DATABASE',
                            'INPUT_TABLE',
                            'OUTPUT_DATABASE',
-                           'OUTPUT_TABLE'])
+                           'OUTPUT_TABLE',
+                           'BUCKET'])
     ETL: ETLJob = ETLJob(input_table=f'{args["INPUT_DATABASE"]}.{args["INPUT_TABLE"]}',
-                         output_table=f'{args["OUTPUT_DATABASE"]}.{args["OUTPUT_TABLE"]}')
+                         output_table=f'{args["OUTPUT_DATABASE"]}.{args["OUTPUT_TABLE"]}',
+                         bucket=args['BUCKET'])
     ETL.job.init(args['JOB_NAME'], args)
     ETL.run()

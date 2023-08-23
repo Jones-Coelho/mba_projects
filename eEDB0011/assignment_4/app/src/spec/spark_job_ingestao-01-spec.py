@@ -1,12 +1,15 @@
 import sys
-from awsglue.utils import getResolvedOptions
-from pyspark.context import SparkContext
+
+from datetime import datetime
+
 from awsglue.context import GlueContext
+from awsglue.dynamicframe import DynamicFrame
 from awsglue.job import Job
-from pyspark.sql.functions import regexp_extract
+from awsglue.utils import getResolvedOptions
+
+from pyspark.context import SparkContext
 from pyspark.sql import DataFrame
 from pyspark.sql import SparkSession
-from datetime import datetime
 from pyspark.sql import functions as F
 # Author: Jones Coelho
 
@@ -16,7 +19,17 @@ class ETLJob:
     A class that performs ETL (Extract, Transform, Load)
     """
 
-    def __init__(self):
+    def __init__(self,
+                 table_bancos:str="db_sot.tb_bancos",
+                 table_empregados:str="db_sot.tb_empregados",
+                 table_reclamacoes:str="db_sot.tb_reclamacoes",
+                 table_name:str=None, 
+                 database:str=None,
+                 host:str=None, 
+                 user:str=None, 
+                 password:str=None,
+                 driver_path:str=None
+                 ):
         """
         Initializes the Spark session for the ETL job.
         """
@@ -24,10 +37,16 @@ class ETLJob:
         self.glueContext: GlueContext = GlueContext(self.sc)
         self.spark: SparkSession = self.glueContext.spark_session
         self.job = Job(self.glueContext)
-        self.bancos: str = "db_sot.tb_bancos"
-        self.empregados: str = "db_sot.tb_empregados"
-        self.reclamacoes: str = "db_sot.tb_reclamacoes"
-        self.path_output: str = "s3://pecepoli-usp-spec-458982960441/report_atividade/"
+        self.bancos = table_bancos
+        self.empregados = table_empregados
+        self.reclamacoes = table_reclamacoes
+        
+        self.table_name = table_name
+        self.database = database
+        self.host = host
+        self.user = user
+        self.password = password
+        self.driver_path = driver_path
 
     def extract(self) -> dict:
         """
@@ -159,7 +178,7 @@ class ETLJob:
 
     def load(self, dataframe: DataFrame) -> None:
         """
-        Saves a DataFrame to an output path as a Parquet file.
+        Saves a DataFrame to a mysql database.
 
         Args:
             dataframe (DataFrame): The Spark DataFrame containing
@@ -168,24 +187,21 @@ class ETLJob:
         Returns:
             None
         """
-        # Reorganize partitions and write a single file using coalesce
-        # This is done to avoid generating too many small files,
-        # which could degrade performance
-        # on subsequent Spark jobs that read the output files.
-        # In a production environment,
-        # calculating the appropriate number of output files
-        # should be considered.
-        df_final: DataFrame = dataframe.coalesce(1)
-
-        # Write data to output file in Parquet format with Snappy compression
-        # If a file already exists at the output location,
-        # it will be overwritten.
         
-        df_final.write\
-                .mode("overwrite")\
-                .partitionBy("anomesdia")\
-                .parquet(path=self.path_output,
-                         compression="snappy")
+        connection = {
+                "url": f"jdbc:mysql://{self.host}:3306/{self.database}",
+                "dbtable": self.table_name,
+                "user": self.user,
+                "password": self.password,
+                "customJdbcDriverS3Path": self.driver_path,
+                "customJdbcDriverClassName": "com.mysql.cj.jdbc.Driver"
+                }
+             
+        glue_df = DynamicFrame.fromDF(dataframe, self.glueContext, self.table_name)
+        self.glueContext.write_from_options(frame_or_dfc=glue_df, 
+                                                connection_type="mysql", 
+                                                connection_options=connection)
+        
 
     def run(self) -> None:
         """
@@ -201,7 +217,27 @@ class ETLJob:
 
 if __name__ == '__main__':
     args = getResolvedOptions(sys.argv,
-                          ['JOB_NAME'])
-    ETL: ETLJob = ETLJob()
+                          ["JOB_NAME",
+                           "TABLE_BANCOS",
+                           "TABLE_EMPREGADOS",
+                           "TABLE_RECLAMACOES",
+                           "TABLE_NAME",
+                           "DATABASE",
+                           "DB_HOST",
+                           "DB_USER",
+                           "DB_PASSWORD",
+                           "DRIVER_PATH"
+                           ])
+    
+    ETL: ETLJob = ETLJob(table_bancos=args.get("TABLE_BANCOS"),
+                         table_empregados=args.get("TABLE_EMPREGADOS"),
+                         table_reclamacoes=args.get("TABLE_RECLAMACOES"),
+                         table_name=args.get("TABLE_NAME"),
+                         database=args.get("DATABASE"),
+                         host=args.get("DB_HOST"),
+                         user=args.get("DB_USER"),
+                         password=args.get("DB_PASSWORD"),
+                         driver_path=args.get("DRIVER_PATH")
+                         )
     ETL.job.init(args['JOB_NAME'], args)
     ETL.run()
