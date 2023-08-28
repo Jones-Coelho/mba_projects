@@ -148,9 +148,9 @@ class ETLJob:
                    max(empregados.vlr_ind_remu_bene) as vlr_ind_remu_bene,
                    max(empregados.vlr_ind_satis_geral) as vlr_ind_satis_geral
             FROM bancos
-            LEFT JOIN reclamacoes
+            INNER JOIN reclamacoes
             ON bancos.num_cnpj_instituicao = reclamacoes.num_cnpj_instituicao OR bancos.nom_instituicao = reclamacoes.nom_instituicao
-            LEFT JOIN empregados
+            INNER JOIN empregados
             ON bancos.nom_instituicao = empregados.nom_instituicao
             GROUP BY bancos.num_cnpj_instituicao
         """
