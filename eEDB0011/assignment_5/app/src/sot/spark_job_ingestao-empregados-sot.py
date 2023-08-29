@@ -269,12 +269,12 @@ class ETLJob:
 if __name__ == '__main__':
 
     args = getResolvedOptions(sys.argv,
-                          ['JOB_NAME',
-                           'INPUT_DATABASE',
-                           'INPUT_TABLE',
-                           'OUTPUT_DATABASE',
-                           'OUTPUT_TABLE',
-                           'BUCKET'])
+                              ['JOB_NAME',
+                               'INPUT_DATABASE',
+                               'INPUT_TABLE',
+                               'OUTPUT_DATABASE',
+                               'OUTPUT_TABLE',
+                               'BUCKET'])
     ETL: ETLJob = ETLJob(input_table=f'{args["INPUT_DATABASE"]}.{args["INPUT_TABLE"]}',
                          output_table=f'{args["OUTPUT_DATABASE"]}.{args["OUTPUT_TABLE"]}',
                          bucket=args['BUCKET'])
