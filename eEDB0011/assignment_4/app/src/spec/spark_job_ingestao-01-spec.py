@@ -79,35 +79,35 @@ class ETLJob:
         parser: dict = {
             "nom_instituicao": {
                 "type": "string",
-                "name": "Nome do Banco"
+                "name": "nome_banco"
             },
             "num_cnpj_instituicao": {
                 "type": "bigint",
-                "name": "CNPJ"
+                "name": "cnpj"
             },
             "nom_segto_instituicao": {
                 "type": "string",
-                "name": "Classificação do Banco"
+                "name": "classificacao_banco"
             },
             "max_qtd_totl_clie_ccs_scr": {
                 "type": "int",
-                "name": "Quantidade de Clientes do Bancos"
+                "name": "quantidade_clientes_banco"
             },
             "avg_ind_recl": {
                 "type": "float",
-                "name": "Índice de reclamações"
+                "name": "indice_reclamacoes"
             },
             "sum_qtd_totl_recl": {
                 "type": "int",
-                "name": "Quantidade de reclamações"
+                "name": "quantidade_reclamacoes"
             },
             "avg_ind_geral_instituicao": {
                 "type": "float",
-                "name": "Índice de satisfação dos funcionários dos bancos"
+                "name": "indice_satisfacao_funcionarios_bancos"
             },
             "avg_ind_remu_bene_instituicao": {
                 "type": "float",
-                "name": "Índice de satisfação com salários dos funcionários dos bancos"
+                "name": "indice_satisfação_salarios_funcionarios_bancos"
             }}
         dataframe = dataframe.select([c for c in list(parser.keys())])
         for coluna, details in parser.items():
