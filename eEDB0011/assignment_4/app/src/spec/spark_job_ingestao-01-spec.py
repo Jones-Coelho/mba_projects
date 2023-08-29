@@ -23,12 +23,8 @@ class ETLJob:
                  table_bancos:str="db_sot.tb_bancos",
                  table_empregados:str="db_sot.tb_empregados",
                  table_reclamacoes:str="db_sot.tb_reclamacoes",
-                 table_name:str=None, 
-                 database:str=None,
-                 host:str=None, 
-                 user:str=None, 
-                 password:str=None,
-                 driver_path:str=None
+                 output_table:str = "db_spec.tb_report",
+                 bucket:str=None
                  ):
         """
         Initializes the Spark session for the ETL job.
@@ -40,13 +36,10 @@ class ETLJob:
         self.bancos = table_bancos
         self.empregados = table_empregados
         self.reclamacoes = table_reclamacoes
+        self.bucket = bucket
         
-        self.table_name = table_name
-        self.database = database
-        self.host = host
-        self.user = user
-        self.password = password
-        self.driver_path = driver_path
+        self.output_table = output_table
+       
 
     def extract(self) -> dict:
         """
@@ -86,35 +79,35 @@ class ETLJob:
         parser: dict = {
             "nom_instituicao": {
                 "type": "string",
-                "name": "Nome do Banco"
+                "name": "nome_banco"
             },
             "num_cnpj_instituicao": {
                 "type": "bigint",
-                "name": "CNPJ"
+                "name": "cnpj"
             },
             "nom_segto_instituicao": {
                 "type": "string",
-                "name": "Classificação do Banco"
+                "name": "classificacao_banco"
             },
             "max_qtd_totl_clie_ccs_scr": {
                 "type": "int",
-                "name": "Quantidade de Clientes do Bancos"
+                "name": "quantidade_clientes_banco"
             },
             "avg_ind_recl": {
                 "type": "float",
-                "name": "Índice de reclamações"
+                "name": "indice_reclamacoes"
             },
             "sum_qtd_totl_recl": {
                 "type": "int",
-                "name": "Quantidade de reclamações"
+                "name": "quantidade_reclamacoes"
             },
             "avg_ind_geral_instituicao": {
                 "type": "float",
-                "name": "Índice de satisfação dos funcionários dos bancos"
+                "name": "indice_satisfacao_funcionarios_bancos"
             },
             "avg_ind_remu_bene_instituicao": {
                 "type": "float",
-                "name": "Índice de satisfação com salários dos funcionários dos bancos"
+                "name": "indice_satisfação_salarios_funcionarios_bancos"
             }}
         dataframe = dataframe.select([c for c in list(parser.keys())])
         for coluna, details in parser.items():
@@ -187,20 +180,24 @@ class ETLJob:
         Returns:
             None
         """
-        
-        connection = {
-                "url": f"jdbc:mysql://{self.host}:3306/{self.database}",
-                "dbtable": self.table_name,
-                "user": self.user,
-                "password": self.password,
-                "customJdbcDriverS3Path": self.driver_path,
-                "customJdbcDriverClassName": "com.mysql.cj.jdbc.Driver"
-                }
-             
-        glue_df = DynamicFrame.fromDF(dataframe, self.glueContext, self.table_name)
-        self.glueContext.write_from_options(frame_or_dfc=glue_df, 
-                                                connection_type="mysql", 
-                                                connection_options=connection)
+        # Reorganize partitions and write a single file using coalesce
+        # This is done to avoid generating too many small files,
+        # which could degrade performance
+        # on subsequent Spark jobs that read the output files.
+        # In a production environment,
+        # calculating the appropriate number of output files
+        # should be considered.
+        df_final: DataFrame = dataframe.coalesce(1)
+
+        # Write data to output file in Parquet format with Snappy compression
+        # If a file already exists at the output location,
+        # it will be overwritten.
+        path: str = f"s3://{self.bucket}/{self.output_table.split('.')[0]}/{self.output_table.split('.')[1]}/"
+        df_final.write\
+                .mode("overwrite")\
+                .partitionBy("anomesdia")\
+                .parquet(path=path,
+                         compression="snappy")
         
 
     def run(self) -> None:
@@ -221,23 +218,15 @@ if __name__ == '__main__':
                            "TABLE_BANCOS",
                            "TABLE_EMPREGADOS",
                            "TABLE_RECLAMACOES",
-                           "TABLE_NAME",
-                           "DATABASE",
-                           "DB_HOST",
-                           "DB_USER",
-                           "DB_PASSWORD",
-                           "DRIVER_PATH"
+                           "OUTPUT_TABLE",
+                           "BUCKET"
                            ])
     
     ETL: ETLJob = ETLJob(table_bancos=args.get("TABLE_BANCOS"),
                          table_empregados=args.get("TABLE_EMPREGADOS"),
                          table_reclamacoes=args.get("TABLE_RECLAMACOES"),
-                         table_name=args.get("TABLE_NAME"),
-                         database=args.get("DATABASE"),
-                         host=args.get("DB_HOST"),
-                         user=args.get("DB_USER"),
-                         password=args.get("DB_PASSWORD"),
-                         driver_path=args.get("DRIVER_PATH")
+                         output_table=args.get("OUTPUT_TABLE"),
+                         bucket=args.get("BUCKET")
                          )
     ETL.job.init(args['JOB_NAME'], args)
     ETL.run()
