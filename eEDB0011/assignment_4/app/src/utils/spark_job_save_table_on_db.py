@@ -95,7 +95,7 @@ class ETLJob:
                 "customJdbcDriverClassName": "com.mysql.cj.jdbc.Driver"
                 }
              
-        glue_df = DynamicFrame.fromDF(dataframe, self.glueContext, self.table_name)
+        glue_df = DynamicFrame.fromDF(dataframe, self.glueContext, self.input_table)
         self.glueContext.write_from_options(frame_or_dfc=glue_df, 
                                                 connection_type="mysql", 
                                                 connection_options=connection)
