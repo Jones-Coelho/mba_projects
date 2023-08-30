@@ -222,13 +222,17 @@ class ETLJob:
             None
         """
         df: DataFrame = self.transform(self.extract()).persist()
+        print("Quantidade de linhas: ", df.count())
         self.data_quality(df)
         self.load(df)
+        self.spark.sparkContext._gateway.shutdown_callback_server()
+        self.spark.stop()
 
     def data_quality(self, dataframe: DataFrame) -> None:
         path_output_data_quality: str = "s3://pecepoli-usp-spec-458982960441/data_quality/"\
                                         f"anomesdia={datetime.now().strftime('%Y%m%d')}/"\
                                         f"nom_tab={self.output_table.split('.')[1]}/" # noqa
+        print("Inicio Data Quality")
         analysis_result = AnalysisRunner(self.spark).onData(dataframe)\
                                                     .addAnalyzer(Size())\
                                                     .addAnalyzer(Completeness("vlr_ind_satis_geral"))\
@@ -247,12 +251,16 @@ class ETLJob:
         analysis_result_df = AnalyzerContext.successMetricsAsDataFrame(self.spark, # noqa
                                                                        analysis_result) # noqa
         # add timestamp for data quality
+        print("Fim Data Quality")
+        print("Escrevendo resultados S3")
         analysis_result_df = analysis_result_df.withColumn("dat_hor_psst",
                                                            F.current_timestamp()) # noqa
         analysis_result_df.write\
                           .mode("append")\
                           .parquet(path=path_output_data_quality,
                                    compression="snappy")
+        self.spark.sql("MSCK REPAIR TABLE db_spec.data_quality")
+        print("Verificando resultados")
         check = Check(self.spark, CheckLevel.Warning, "Review Check")
         check_result = VerificationSuite(self.spark).onData(dataframe)\
                                                     .addCheck(check.hasSize(lambda size: size >= 1)\
@@ -260,11 +268,13 @@ class ETLJob:
                                                     .isNonNegative("vlr_ind_satis_geral")\
                                                     .isNonNegative("vlr_ind_remu_bene"))\
                                                     .run() # noqa
+        print("Data Frame de Resultados")
         check_result_df = VerificationResult.checkResultsAsDataFrame(self.spark, # noqa
                                                                      check_result) # noqa
-        if check_result_df.filter("constraint_status" != "Success").count():
+        if check_result_df.filter(F.col("constraint_status") != "Success").count():
             check_result_df.show()
             raise Exception("Data Quality Check Failed")
+        print("Fim Data Quality")
 
 if __name__ == '__main__':
 

@@ -142,6 +142,8 @@ class ETLJob:
         df: DataFrame = self.transform(self.extract()).persist()
         self.data_quality(df)
         self.load(df)
+        self.spark.sparkContext._gateway.shutdown_callback_server()
+        self.spark.stop()
 
     def data_quality(self, dataframe: DataFrame) -> None:
         path_output_data_quality: str = "s3://pecepoli-usp-spec-458982960441/data_quality/"\
@@ -163,6 +165,7 @@ class ETLJob:
                           .mode("append")\
                           .parquet(path=path_output_data_quality,
                                    compression="snappy")
+        self.spark.sql("MSCK REPAIR TABLE db_spec.data_quality")
         check = Check(self.spark, CheckLevel.Warning, "Review Check")
         check_result = VerificationSuite(self.spark).onData(dataframe)\
                                                     .addCheck(check.isContainedIn("nom_segto_instituicao", # noqa
@@ -174,7 +177,7 @@ class ETLJob:
                                                     .run() # noqa
         check_result_df = VerificationResult.checkResultsAsDataFrame(self.spark, # noqa
                                                                      check_result) # noqa
-        if check_result_df.filter("constraint_status" != "Success").count():
+        if check_result_df.filter(F.col("constraint_status") != "Success").count():
             check_result_df.show()
             raise Exception("Data Quality Check Failed")
 
