@@ -226,7 +226,7 @@ class ETLJob:
         self.load(df)
 
     def data_quality(self, dataframe: DataFrame) -> None:
-        path_output_data_quality: str = f"s3://{self.bucket}/data_quality/"\
+        path_output_data_quality: str = "s3://pecepoli-usp-spec-458982960441/data_quality/"\
                                         f"anomesdia={datetime.now().strftime('%Y%m%d')}/"\
                                         f"nom_tab={self.output_table.split('.')[1]}/" # noqa
         analysis_result = AnalysisRunner(self.spark).onData(dataframe)\
