@@ -200,7 +200,7 @@ class ETLJob:
         # Write data to output file in Parquet format with Snappy compression
         # If a file already exists at the output location,
         # it will be overwritten.
-        path: str = f"s3://{self.bucket}/{self.output_table.split('.')[0]}/{self.output_table.split('.')[1]}/"
+        path: str = f"s3://{self.bucket}/{self.output_table.split('.')[1]}/"
         df_final.write\
                 .mode("overwrite")\
                 .partitionBy("anomesdia")\
@@ -228,7 +228,8 @@ class ETLJob:
         self.spark.sparkContext._gateway.shutdown_callback_server()
         self.spark.stop()
 
-    def data_quality(self, dataframe: DataFrame) -> None:
+    def data_quality(self,
+                     dataframe: DataFrame) -> None:
         path_output_data_quality: str = "s3://pecepoli-usp-spec-458982960441/data_quality/"\
                                         f"anomesdia={datetime.now().strftime('%Y%m%d')}/"\
                                         f"nom_tab={self.output_table.split('.')[1]}/" # noqa

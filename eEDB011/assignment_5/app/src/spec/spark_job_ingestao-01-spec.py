@@ -208,7 +208,7 @@ class ETLJob:
         # Write data to output file in Parquet format with Snappy compression
         # If a file already exists at the output location,
         # it will be overwritten.
-        path: str = f"s3://{self.bucket}/{self.output_table.split('.')[0]}/{self.output_table.split('.')[1]}/"
+        path: str = f"s3://{self.bucket}/{self.output_table.split('.')[1]}/"
         df_final.write\
                 .mode("overwrite")\
                 .partitionBy("anomesdia")\
